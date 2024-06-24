@@ -26,6 +26,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time;
 use std::vec;
+use std::cmp::Reverse;
 
 #[derive(Parser)]
 #[command(version = "0.1")]
@@ -70,6 +71,7 @@ pub enum ItemType {
 #[derive(Debug)]
 pub struct FileInfo {
     pub path: PathBuf,
+    pub depth: u8,
     pub file_type: ItemType,
     pub size: u64,
     pub modified: time::SystemTime,
@@ -108,7 +110,7 @@ fn get_file_type(md: &fs::Metadata) -> ItemType {
     }
 }
 
-fn get_file_info(path: &Path, md: &fs::Metadata) -> Result<FileInfo, Box<dyn Error>> {
+fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, Box<dyn Error>> {
     let modified = md.modified()?;
     // make new PathBuf from given Path (to avoid lifetime issues)
     let p = PathBuf::from(&path.to_str().unwrap());
@@ -117,6 +119,7 @@ fn get_file_info(path: &Path, md: &fs::Metadata) -> Result<FileInfo, Box<dyn Err
 
     Ok(FileInfo {
         path: p,
+        depth: depth,
         file_type: ft,
         size: md.len(),
         modified: modified.clone(),
@@ -128,14 +131,21 @@ fn sort(path_info: &mut Vec<FileInfo>, ascending: bool, field: &str) {
     // sort by field string from FileInfo struct
     // see Vector.sort_by_key
     // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.sort_by_key
+    if ascending {
+        path_info.sort_by_key(|item| item.size);
+    }
+    else {
+        path_info.sort_by_key(|item| Reverse(item.size));
+    };
+    
 
 }
 
 fn print_results(path_info: &Vec<FileInfo>) {
-    // print results in nice table
+    println!("\n\n{:#?}", path_info);
 }
 
-pub fn walk(path: &Path, indent: Option<usize>) -> Result<Vec<FileInfo>, Box<dyn Error>> { //Result<FileInfo, Box<dyn Error>> { //
+pub fn walk(path: &Path, depth: u8, indent: Option<usize>) -> Result<Vec<FileInfo>, Box<dyn Error>> { //Result<FileInfo, Box<dyn Error>> { //
     let indent = indent.unwrap_or(0);
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
@@ -148,7 +158,7 @@ pub fn walk(path: &Path, indent: Option<usize>) -> Result<Vec<FileInfo>, Box<dyn
 
     let attr = fs::metadata(path)?;
     if attr.is_file() {
-        let fi = get_file_info(path, &attr)?;
+        let fi = get_file_info(path, depth, &attr)?;
 
         println!("{}is file of size {}", " ".repeat(indent), fi.size);
         println!("{}pushing file {:?} to vec", " ".repeat(indent), path);
@@ -162,7 +172,7 @@ pub fn walk(path: &Path, indent: Option<usize>) -> Result<Vec<FileInfo>, Box<dyn
         
         for entry in fs::read_dir(path)? {
             let item = entry?;
-            let mut fi = walk(&item.path(), Some(indent + 2))?;
+            let mut fi = walk(&item.path(), depth+1, Some(indent + 2))?;
 
             println!("{}appending vec of size {} to vec", " ".repeat(indent), fi.len());
             all_file_info.append(&mut fi);
@@ -197,6 +207,7 @@ pub fn walk(path: &Path, indent: Option<usize>) -> Result<Vec<FileInfo>, Box<dyn
         let ft = get_file_type(&attr);
         let total_info = FileInfo {
             path: p,
+            depth: depth,
             file_type: ft,
             size: total_size,
             modified: most_recent,
@@ -213,20 +224,23 @@ pub fn list_files(cli: Cli) {
 
     // let path_info = walk(&path, None).unwrap();
 
-    let total_info = walk(&path, None).unwrap();
-    let path_info = total_info.last().unwrap();
+    let mut total_info = walk(&path, 1, None).unwrap();
+    // let path_info = total_info.last().unwrap().clone();
+    sort(&mut total_info, cli.ascending, "size");
 
-    let byte_type = if cli.si {
-        ByteType::Decimal
-    } else {
-        ByteType::Binary
-    };
-    let format_size = format_size(path_info.size, byte_type);
+    // let byte_type = if cli.si {
+    //     ByteType::Decimal
+    // } else {
+    //     ByteType::Binary
+    // };
+    // let format_size = format_size(path_info.size, byte_type);
 
-    println!(
-        "\nDone!\ntotal size: {},\nmost recent: {:?}",
-        format_size, path_info.modified
-    );
+    // println!(
+    //     "\nDone!\ntotal size: {},\nmost recent: {:?}",
+    //     format_size, path_info.modified
+    // );
 
-    println!("\n\n{:#?}", total_info)
+    // println!("\n\n{:#?}", total_info)
+
+    print_results(&total_info);
 }
