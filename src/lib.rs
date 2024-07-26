@@ -20,7 +20,7 @@
 
 // Metadata docs https://doc.rust-lang.org/std/fs/struct.Metadata.html
 
-use clap::Parser;
+
 use std::cmp::{Ordering, Reverse};
 use std::error::Error;
 use std::fmt;
@@ -28,6 +28,8 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time;
 use std::vec;
+use clap::Parser;
+use chrono::{DateTime, Utc};
 
 #[derive(Parser)]
 #[command(version = "0.1")]
@@ -100,7 +102,10 @@ impl FileInfo {
             format!("{:>width$}", self.size, width = size_width)
         };
 
-        let s = format!("{} {}", size, self.path.to_str().unwrap());
+        let date_time: DateTime<Utc> = self.modified.clone().into();
+        let ts = format!("{}", date_time.format("%Y %b %d %H:%M:%S"));
+
+        let s = format!("{}  {}  {}", size, ts, self.path.to_str().unwrap());
 
         match self.file_type {
             ItemType::Dir => format!("\x1b[34m{:#}\x1b[0m", s),
@@ -148,7 +153,7 @@ fn format_size(size: u64, byte_type: &ByteType, size_width: usize) -> String {
 
     let width = (size_width % 3) + 4;
 
-    format!("{0:width$.3}{1}B", size_f, prefixes[idx])
+    format!("{0:width$.3} {1}B", size_f, prefixes[idx])
 }
 
 fn get_file_type(md: &fs::Metadata) -> ItemType {
@@ -287,7 +292,7 @@ pub fn walk(
         let mut most_recent: time::SystemTime = time::UNIX_EPOCH;
 
         for entry in fs::read_dir(path)? {
-            let item = entry?;
+            let item: fs::DirEntry = entry?;
             let mut fi = walk(&item.path(), depth + 1, Some(indent + 2))?;
 
             // println!(
