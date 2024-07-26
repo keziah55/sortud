@@ -21,12 +21,13 @@
 // Metadata docs https://doc.rust-lang.org/std/fs/struct.Metadata.html
 
 use clap::Parser;
+use std::cmp::{Ordering, Reverse};
 use std::error::Error;
-use std::fs;
+use std::fmt;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time;
 use std::vec;
-use std::cmp::Reverse;
 
 #[derive(Parser)]
 #[command(version = "0.1")]
@@ -56,17 +57,31 @@ pub struct Cli {
     file: String,
 }
 
-enum ByteType {
+pub enum ByteType {
     Binary,
     Decimal,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub enum ItemType {
     File,
     Dir,
     Symlink,
 }
+
+// impl Ord for ItemType {
+//     #[inline]
+//     fn cmp(&self, other: &ItemType) -> Ordering {
+//         if self == other {
+//             Ordering::Equal
+//         } else if self == ItemType.Dir {
+//             Ordering::Greater
+//         } else {
+//             Ordering::Less
+//         }
+
+//     }
+// }
 
 #[derive(Debug)]
 pub struct FileInfo {
@@ -77,11 +92,47 @@ pub struct FileInfo {
     pub modified: time::SystemTime,
 }
 
-fn format_size(size: u64, byte_type: ByteType) -> String {
+impl FileInfo {
+    pub fn to_string(&self, humanize: bool, byte_type: &ByteType, size_width: usize) -> String {
+        let size = if humanize {
+            format_size(self.size, byte_type, size_width)
+        } else {
+            format!("{:>width$}", self.size, width = size_width)
+        };
+
+        let s = format!("{} {}", size, self.path.to_str().unwrap());
+
+        match self.file_type {
+            ItemType::Dir => format!("\x1b[34m{:#}\x1b[0m", s),
+            ItemType::Symlink => format!("\x1b[92m{:#}\x1b[0m", s),
+            ItemType::File => format!("{:#}", s),
+        }
+    }
+}
+impl fmt::Display for FileInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = self.to_string(true, &ByteType::Binary, 10);
+        write!(f, "{}", s)
+    }
+}
+
+// impl FileInfo {
+//     fn get_field<T>(&self, field: &str) -> &T {
+//         match field {
+//             "path" => &self.path,
+//             "depth" => &self.depth,
+//             "file_type" => &self.file_type,
+//             "size" => &self.size,
+//             "modified" => &self.modified,
+//         }
+//     }
+// }
+
+fn format_size(size: u64, byte_type: &ByteType, size_width: usize) -> String {
     let mut size_f = size as f64;
     let mut prefixes = vec!["", "K", "M", "G", "T"];
 
-    let div = match byte_type {
+    let div = match &byte_type {
         ByteType::Decimal => {
             prefixes[1] = "k";
             1000.0
@@ -95,7 +146,9 @@ fn format_size(size: u64, byte_type: ByteType) -> String {
         idx += 1;
     }
 
-    format!("{0:.3} {1}B", size_f, prefixes[idx])
+    let width = (size_width % 3) + 4;
+
+    format!("{0:width$.3}{1}B", size_f, prefixes[idx])
 }
 
 fn get_file_type(md: &fs::Metadata) -> ItemType {
@@ -126,67 +179,134 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
     })
 }
 
-fn sort(path_info: &mut Vec<FileInfo>, ascending: bool, field: &str) {
-    // modify path_info in place
-    // sort by field string from FileInfo struct
-    // see Vector.sort_by_key
-    // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.sort_by_key
-    if ascending {
-        path_info.sort_by_key(|item| item.size);
-    }
-    else {
-        path_info.sort_by_key(|item| Reverse(item.size));
+// #[derive(PartialEq, Eq, Debug, Copy, Default, Hash, PartialOrd, Ord, Clone)]
+// pub struct NonReverse<T>(pub T);
+
+// fn sort(path_info: &mut Vec<FileInfo>, ascending: bool, field: &str) {
+//     // modify path_info in place
+//     // sort by field string from FileInfo struct
+//     // see Vector.sort_by_key
+//     // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.sort_by_key
+
+//     match field {
+//         "path" => {
+//             if ascending {
+//                 path_info.sort_by_key(|item: &FileInfo| item.path)
+//             }
+//             else {
+//                 path_info.sort_by_key(|item| Reverse(item.path))
+//             }
+//         },
+//         "depth" => if ascending {
+//             path_info.sort_by_key(|item| item.depth)
+//         }
+//         else {
+//             path_info.sort_by_key(|item| Reverse(item.depth))
+//         },
+//         "file_type" => if ascending {
+//             path_info.sort_by_key(|item| item.file_type)
+//         }
+//         else {
+//             path_info.sort_by_key(|item| Reverse(item.file_type))
+//         },
+//         "size" => {
+//             if ascending {
+//                 path_info.sort_by_key(|item| item.size)
+//             }
+//             else {
+//                 path_info.sort_by_key(|item| Reverse(item.size))
+//             }
+//         },
+//         "modified" => if ascending {
+//             path_info.sort_by_key(|item| item.modified)
+//         }
+//         else {
+//             path_info.sort_by_key(|item| Reverse(item.modified))
+//         },
+//     }
+
+//     // let f = if ascending {
+//     //     NonReverse
+//     // } else {
+//     //     Reverse
+//     // };
+
+//     // path_info.sort_by_key(|item: &FileInfo| f(item.size));
+
+//     if ascending {
+//         path_info.sort_by_key(|item| item.size);
+//     }
+//     else {
+//         path_info.sort_by_key(|item| Reverse(item.size));
+//     };
+
+// }
+
+fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool) {
+    let max_size = path_info.iter().max_by_key(|info| info.size).unwrap().size;
+    let digits = format!("{}", max_size).len();
+
+    let byte_type = if si {
+        ByteType::Decimal
+    } else {
+        ByteType::Binary
     };
-    
 
+    for info in path_info {
+        let s = info.to_string(humanize, &byte_type, digits);
+        println!("{}", s)
+    }
 }
 
-fn print_results(path_info: &Vec<FileInfo>) {
-    println!("\n\n{:#?}", path_info);
-}
-
-pub fn walk(path: &Path, depth: u8, indent: Option<usize>) -> Result<Vec<FileInfo>, Box<dyn Error>> { //Result<FileInfo, Box<dyn Error>> { //
+pub fn walk(
+    path: &Path,
+    depth: u8,
+    indent: Option<usize>,
+) -> Result<Vec<FileInfo>, Box<dyn Error>> {
     let indent = indent.unwrap_or(0);
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
 
-    println!(
-        "{}walking {:?}...",
-        " ".repeat(indent),
-        &path.to_str().unwrap()
-    );
+    // println!(
+    //     "{}walking {:?}...",
+    //     " ".repeat(indent),
+    //     &path.to_str().unwrap()
+    // );
 
     let attr = fs::metadata(path)?;
     if attr.is_file() {
         let fi = get_file_info(path, depth, &attr)?;
 
-        println!("{}is file of size {}", " ".repeat(indent), fi.size);
-        println!("{}pushing file {:?} to vec", " ".repeat(indent), path);
+        // println!("{}is file of size {}", " ".repeat(indent), fi.size);
+        // println!("{}pushing file {:?} to vec", " ".repeat(indent), path);
         all_file_info.push(fi);
-
     } else if attr.is_dir() {
-        println!("{}is dir, iterating...", " ".repeat(indent));
+        // println!("{}is dir, iterating...", " ".repeat(indent));
 
         let mut total_size: u64 = 0;
         let mut most_recent: time::SystemTime = time::UNIX_EPOCH;
-        
+
         for entry in fs::read_dir(path)? {
             let item = entry?;
-            let mut fi = walk(&item.path(), depth+1, Some(indent + 2))?;
+            let mut fi = walk(&item.path(), depth + 1, Some(indent + 2))?;
 
-            println!("{}appending vec of size {} to vec", " ".repeat(indent), fi.len());
+            // println!(
+            //     "{}appending vec of size {} to vec",
+            //     " ".repeat(indent),
+            //     fi.len()
+            // );
             all_file_info.append(&mut fi);
 
             let summarised_fi = all_file_info.last().unwrap();
 
-            println!(
-                "{}adding size {} from '{}'",
-                " ".repeat(indent),
-                summarised_fi.size,
-                &item.path().file_name().unwrap().to_str().unwrap()
-            );
+            // println!(
+            //     "{}adding size {} from '{}'",
+            //     " ".repeat(indent),
+            //     summarised_fi.size,
+            //     &item.path().file_name().unwrap().to_str().unwrap()
+            // );
             total_size += summarised_fi.size;
-            println!("{}total size: {}", " ".repeat(indent), total_size);
+            // println!("{}total size: {}", " ".repeat(indent), total_size);
             if summarised_fi.modified > most_recent {
                 most_recent = summarised_fi.modified;
             }
@@ -194,14 +314,14 @@ pub fn walk(path: &Path, depth: u8, indent: Option<usize>) -> Result<Vec<FileInf
 
         // make FileInfo with summarised dir?
         // after max depth, only include summary
-        println!(
-            "{}adding size {} from dir '{}'",
-            " ".repeat(indent),
-            attr.len(),
-            &path.file_name().unwrap().to_str().unwrap()
-        );
+        // println!(
+        //     "{}adding size {} from dir '{}'",
+        //     " ".repeat(indent),
+        //     attr.len(),
+        //     &path.file_name().unwrap().to_str().unwrap()
+        // );
         total_size += attr.len();
-        println!("{}total size: {}", " ".repeat(indent), total_size);
+        // println!("{}total size: {}", " ".repeat(indent), total_size);
 
         let p = PathBuf::from(&path.to_str().unwrap());
         let ft = get_file_type(&attr);
@@ -226,7 +346,7 @@ pub fn list_files(cli: Cli) {
 
     let mut total_info = walk(&path, 1, None).unwrap();
     // let path_info = total_info.last().unwrap().clone();
-    sort(&mut total_info, cli.ascending, "size");
+    // sort(&mut total_info, cli.ascending, "size");
 
     // let byte_type = if cli.si {
     //     ByteType::Decimal
@@ -242,5 +362,5 @@ pub fn list_files(cli: Cli) {
 
     // println!("\n\n{:#?}", total_info)
 
-    print_results(&total_info);
+    print_results(&total_info, cli.humanize, cli.si);
 }
