@@ -265,9 +265,7 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool) {
 pub fn walk(
     path: &Path,
     depth: u8,
-    indent: Option<usize>,
 ) -> Result<Vec<FileInfo>, Box<dyn Error>> {
-    let indent = indent.unwrap_or(0);
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
 
@@ -283,13 +281,13 @@ pub fn walk(
 
         for entry in fs::read_dir(path)? {
             let item: fs::DirEntry = entry?;
-            let mut fi = walk(&item.path(), depth + 1, Some(indent + 2))?;
+            let mut fi = walk(&item.path(), depth + 1)?;
 
             all_file_info.append(&mut fi);
 
             let summarised_fi = all_file_info.last().unwrap();
             total_size += summarised_fi.size;
-            // println!("{}total size: {}", " ".repeat(indent), total_size);
+
             if summarised_fi.modified > most_recent {
                 most_recent = summarised_fi.modified;
             }
@@ -320,7 +318,7 @@ pub fn list_files(cli: Cli) {
 
     // let path_info = walk(&path, None).unwrap();
 
-    let mut total_info = walk(&path, 1, None).unwrap();
+    let mut total_info = walk(&path, 1).unwrap();
     // let path_info = total_info.last().unwrap().clone();
     // sort(&mut total_info, cli.ascending, "size");
 
