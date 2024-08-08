@@ -69,20 +69,6 @@ pub enum ItemType {
     Symlink,
 }
 
-// impl Ord for ItemType {
-//     #[inline]
-//     fn cmp(&self, other: &ItemType) -> Ordering {
-//         if self == other {
-//             Ordering::Equal
-//         } else if self == ItemType.Dir {
-//             Ordering::Greater
-//         } else {
-//             Ordering::Less
-//         }
-
-//     }
-// }
-
 #[derive(Debug)]
 pub struct FileInfo {
     pub path: PathBuf,
@@ -131,18 +117,6 @@ impl fmt::Display for FileInfo {
         write!(f, "{}", s)
     }
 }
-
-// impl FileInfo {
-//     fn get_field<T>(&self, field: &str) -> &T {
-//         match field {
-//             "path" => &self.path,
-//             "depth" => &self.depth,
-//             "file_type" => &self.file_type,
-//             "size" => &self.size,
-//             "modified" => &self.modified,
-//         }
-//     }
-// }
 
 fn format_size(size: u64, byte_type: &ByteType, size_width: usize) -> String {
     let mut size_f = size as f64;
@@ -194,69 +168,6 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
         modified: modified.clone(),
     })
 }
-
-// #[derive(PartialEq, Eq, Debug, Copy, Default, Hash, PartialOrd, Ord, Clone)]
-// pub struct NonReverse<T>(pub T);
-
-// fn sort(path_info: &mut Vec<FileInfo>, ascending: bool, field: &str) {
-//     // modify path_info in place
-//     // sort by field string from FileInfo struct
-//     // see Vector.sort_by_key
-//     // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.sort_by_key
-
-//     match field {
-//         "path" => {
-//             if ascending {
-//                 path_info.sort_by_key(|item: &FileInfo| item.path)
-//             }
-//             else {
-//                 path_info.sort_by_key(|item| Reverse(item.path))
-//             }
-//         },
-//         "depth" => if ascending {
-//             path_info.sort_by_key(|item| item.depth)
-//         }
-//         else {
-//             path_info.sort_by_key(|item| Reverse(item.depth))
-//         },
-//         "file_type" => if ascending {
-//             path_info.sort_by_key(|item| item.file_type)
-//         }
-//         else {
-//             path_info.sort_by_key(|item| Reverse(item.file_type))
-//         },
-//         "size" => {
-//             if ascending {
-//                 path_info.sort_by_key(|item| item.size)
-//             }
-//             else {
-//                 path_info.sort_by_key(|item| Reverse(item.size))
-//             }
-//         },
-//         "modified" => if ascending {
-//             path_info.sort_by_key(|item| item.modified)
-//         }
-//         else {
-//             path_info.sort_by_key(|item| Reverse(item.modified))
-//         },
-//     }
-
-//     // let f = if ascending {
-//     //     NonReverse
-//     // } else {
-//     //     Reverse
-//     // };
-
-//     // path_info.sort_by_key(|item: &FileInfo| f(item.size));
-
-//     if ascending {
-//         path_info.sort_by_key(|item| item.size);
-//     }
-//     else {
-//         path_info.sort_by_key(|item| Reverse(item.size));
-//     };
-
-// }
 
 fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool) {
     let max_size = path_info.iter().max_by_key(|info| info.size).unwrap().size;
