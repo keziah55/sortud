@@ -20,7 +20,8 @@
 
 // Metadata docs https://doc.rust-lang.org/std/fs/struct.Metadata.html
 
-
+use chrono::{DateTime, Utc};
+use clap::Parser;
 use std::cmp::{Ordering, Reverse};
 use std::error::Error;
 use std::fmt;
@@ -28,8 +29,6 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time;
 use std::vec;
-use clap::Parser;
-use chrono::{DateTime, Utc};
 
 #[derive(Parser)]
 #[command(version = "0.1")]
@@ -272,21 +271,12 @@ pub fn walk(
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
 
-    // println!(
-    //     "{}walking {:?}...",
-    //     " ".repeat(indent),
-    //     &path.to_str().unwrap()
-    // );
-
     let attr = fs::metadata(path)?;
     if attr.is_file() {
         let fi = get_file_info(path, depth, &attr)?;
-
-        // println!("{}is file of size {}", " ".repeat(indent), fi.size);
-        // println!("{}pushing file {:?} to vec", " ".repeat(indent), path);
         all_file_info.push(fi);
     } else if attr.is_dir() {
-        // println!("{}is dir, iterating...", " ".repeat(indent));
+        let parent_info_idx = all_file_info.len();
 
         let mut total_size: u64 = 0;
         let mut most_recent: time::SystemTime = time::UNIX_EPOCH;
@@ -295,21 +285,9 @@ pub fn walk(
             let item: fs::DirEntry = entry?;
             let mut fi = walk(&item.path(), depth + 1, Some(indent + 2))?;
 
-            // println!(
-            //     "{}appending vec of size {} to vec",
-            //     " ".repeat(indent),
-            //     fi.len()
-            // );
             all_file_info.append(&mut fi);
 
             let summarised_fi = all_file_info.last().unwrap();
-
-            // println!(
-            //     "{}adding size {} from '{}'",
-            //     " ".repeat(indent),
-            //     summarised_fi.size,
-            //     &item.path().file_name().unwrap().to_str().unwrap()
-            // );
             total_size += summarised_fi.size;
             // println!("{}total size: {}", " ".repeat(indent), total_size);
             if summarised_fi.modified > most_recent {
@@ -317,16 +295,8 @@ pub fn walk(
             }
         }
 
-        // make FileInfo with summarised dir?
-        // after max depth, only include summary
-        // println!(
-        //     "{}adding size {} from dir '{}'",
-        //     " ".repeat(indent),
-        //     attr.len(),
-        //     &path.file_name().unwrap().to_str().unwrap()
-        // );
+        // make FileInfo with summarised dir
         total_size += attr.len();
-        // println!("{}total size: {}", " ".repeat(indent), total_size);
 
         let p = PathBuf::from(&path.to_str().unwrap());
         let ft = get_file_type(&attr);
@@ -338,7 +308,8 @@ pub fn walk(
             modified: most_recent,
         };
 
-        all_file_info.push(total_info);
+        // insert parent dir entry above it's contents
+        all_file_info.insert(parent_info_idx, total_info);
     }
 
     Ok(all_file_info)
