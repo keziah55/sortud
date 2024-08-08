@@ -22,10 +22,9 @@
 
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use std::cmp::{Ordering, Reverse};
 use std::error::Error;
 use std::fmt;
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time;
 use std::vec;
@@ -94,17 +93,30 @@ pub struct FileInfo {
 }
 
 impl FileInfo {
-    pub fn to_string(&self, humanize: bool, byte_type: &ByteType, size_width: usize) -> String {
-        let size = if humanize {
+    pub fn to_string(
+        &self,
+        humanize: bool,
+        byte_type: &ByteType,
+        size_width: usize,
+        show_ts: bool,
+    ) -> String {
+        let space = " ".repeat(2);
+
+        let mut size = if humanize {
             format_size(self.size, byte_type, size_width)
         } else {
             format!("{:>width$}", self.size, width = size_width)
         };
+        size = format!("{}{}", size, space);
 
-        let date_time: DateTime<Utc> = self.modified.clone().into();
-        let ts = format!("{}", date_time.format("%Y %b %d %H:%M:%S"));
+        let ts = if show_ts {
+            let date_time: DateTime<Utc> = self.modified.clone().into();
+            format!("{}{}", date_time.format("%Y %b %d %H:%M:%S"), space)
+        } else {
+            String::from("")
+        };
 
-        let s = format!("{}  {}  {}", size, ts, self.path.to_str().unwrap());
+        let s = format!("{}{}{}", size, ts, self.path.to_str().unwrap());
 
         match self.file_type {
             ItemType::Dir => format!("\x1b[34m{:#}\x1b[0m", s),
@@ -115,7 +127,7 @@ impl FileInfo {
 }
 impl fmt::Display for FileInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = self.to_string(true, &ByteType::Binary, 10);
+        let s = self.to_string(true, &ByteType::Binary, 10, true);
         write!(f, "{}", s)
     }
 }
@@ -246,7 +258,7 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
 
 // }
 
-fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool) {
+fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool) {
     let max_size = path_info.iter().max_by_key(|info| info.size).unwrap().size;
     let digits = format!("{}", max_size).len();
 
@@ -257,16 +269,12 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool) {
     };
 
     for info in path_info {
-        let s = info.to_string(humanize, &byte_type, digits);
+        let s = info.to_string(humanize, &byte_type, digits, show_ts);
         println!("{}", s)
     }
 }
 
-pub fn walk(
-    path: &Path,
-    depth: u8,
-) -> Result<Vec<FileInfo>, Box<dyn Error>> {
-
+pub fn walk(path: &Path, depth: u8) -> Result<Vec<FileInfo>, Box<dyn Error>> {
     let mut all_file_info: Vec<FileInfo> = Vec::new();
 
     let attr = fs::metadata(path)?;
@@ -318,7 +326,7 @@ pub fn list_files(cli: Cli) {
 
     // let path_info = walk(&path, None).unwrap();
 
-    let mut total_info = walk(&path, 1).unwrap();
+    let total_info = walk(&path, 1).unwrap();
     // let path_info = total_info.last().unwrap().clone();
     // sort(&mut total_info, cli.ascending, "size");
 
@@ -336,5 +344,5 @@ pub fn list_files(cli: Cli) {
 
     // println!("\n\n{:#?}", total_info)
 
-    print_results(&total_info, cli.humanize, cli.si);
+    print_results(&total_info, cli.humanize, cli.si, cli.time);
 }
