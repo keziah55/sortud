@@ -76,6 +76,7 @@ pub struct FileInfo {
     pub file_type: ItemType,
     pub size: u64,
     pub modified: time::SystemTime,
+    pub children: Option<Vec<FileInfo>>
 }
 
 impl FileInfo {
@@ -166,6 +167,7 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
         file_type: ft,
         size: md.len(),
         modified: modified.clone(),
+        children: None,
     })
 }
 
@@ -185,26 +187,36 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: b
     }
 }
 
-pub fn walk(path: &Path, depth: u8) -> Result<Vec<FileInfo>, Box<dyn Error>> {
-    let mut all_file_info: Vec<FileInfo> = Vec::new();
+pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) { //-> Result<Vec<FileInfo>, Box<dyn Error>> {
+    
+    // let mut all_file_info = match parent {
+    //     Some(v) => v,
+    //     None => &Vec::new(),
+    // };
+    // let mut all_file_info: Vec<FileInfo> = Vec::new();
 
-    let attr = fs::metadata(path)?;
+
+    let attr = fs::metadata(path).unwrap();
     if attr.is_file() {
-        let fi = get_file_info(path, depth, &attr)?;
+        let fi = get_file_info(path, depth, &attr).unwrap();
         all_file_info.push(fi);
     } else if attr.is_dir() {
         let parent_info_idx = all_file_info.len();
 
+        let mut dir_info: Vec<FileInfo> = Vec::new();
+
         let mut total_size: u64 = 0;
         let mut most_recent: time::SystemTime = time::UNIX_EPOCH;
 
-        for entry in fs::read_dir(path)? {
-            let item: fs::DirEntry = entry?;
-            let mut fi = walk(&item.path(), depth + 1)?;
+        for entry in fs::read_dir(path).unwrap() {
+            let item: fs::DirEntry = entry.unwrap();
+            // let mut fi = walk(&item.path(), depth + 1, &all_file_info)?;
+            walk(&item.path(), depth + 1, &mut dir_info);
 
-            all_file_info.append(&mut fi);
+            // all_file_info.append(&mut fi);
 
-            let summarised_fi = all_file_info.last().unwrap();
+            let summarised_fi = dir_info.last().unwrap();
+            // let summarised_fi = all_file_info.last().unwrap();
             total_size += summarised_fi.size;
 
             if summarised_fi.modified > most_recent {
@@ -223,13 +235,14 @@ pub fn walk(path: &Path, depth: u8) -> Result<Vec<FileInfo>, Box<dyn Error>> {
             file_type: ft,
             size: total_size,
             modified: most_recent,
+            children: Some(dir_info),
         };
 
         // insert parent dir entry above it's contents
         all_file_info.insert(parent_info_idx, total_info);
     }
 
-    Ok(all_file_info)
+    // Ok(all_file_info)
 }
 
 pub fn list_files(cli: Cli) {
@@ -237,7 +250,11 @@ pub fn list_files(cli: Cli) {
 
     // let path_info = walk(&path, None).unwrap();
 
-    let total_info = walk(&path, 1).unwrap();
+    let mut all_file_info: Vec<FileInfo> = Vec::new();
+    // let total_info = walk(&path, 1, all_file_info).unwrap();
+    walk(&path, 1, &mut all_file_info);
+
+
     // let path_info = total_info.last().unwrap().clone();
     // sort(&mut total_info, cli.ascending, "size");
 
@@ -255,5 +272,5 @@ pub fn list_files(cli: Cli) {
 
     // println!("\n\n{:#?}", total_info)
 
-    print_results(&total_info, cli.humanize, cli.si, cli.time);
+    print_results(&all_file_info, cli.humanize, cli.si, cli.time);
 }
