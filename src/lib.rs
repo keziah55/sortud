@@ -50,7 +50,7 @@ pub struct Cli {
     si: bool,
 
     /// show time of last modification of file, or any file in sub-directory
-    #[arg(long)]
+    #[arg(short = 't', long)]
     time: bool,
 
     /// file or path
@@ -69,14 +69,14 @@ pub enum ItemType {
     Symlink,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct FileInfo {
     pub path: PathBuf,
     pub depth: u8,
     pub file_type: ItemType,
     pub size: u64,
     pub modified: time::SystemTime,
-    pub children: Option<Vec<FileInfo>>
+    pub children: Option<Vec<FileInfo>>,
 }
 
 impl FileInfo {
@@ -137,9 +137,28 @@ fn format_size(size: u64, byte_type: &ByteType, size_width: usize) -> String {
         idx += 1;
     }
 
-    let width = (size_width % 3) + 4;
+    let width = 7; //(size_width % 3) + 4; //
 
     format!("{0:width$.3} {1}B", size_f, prefixes[idx])
+}
+
+fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool) {
+    let max_size = path_info.iter().max_by_key(|info| info.size).unwrap().size;
+    let digits = format!("{}", max_size).len();
+
+    let byte_type = if si {
+        ByteType::Decimal
+    } else {
+        ByteType::Binary
+    };
+
+    for info in path_info {
+        let s = info.to_string(humanize, &byte_type, digits, show_ts);
+        println!("{}", s);
+        if let Some(v) = &info.children {
+            print_results(v, humanize, si, show_ts)
+        }
+    }
 }
 
 fn get_file_type(md: &fs::Metadata) -> ItemType {
@@ -171,31 +190,7 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
     })
 }
 
-fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool) {
-    let max_size = path_info.iter().max_by_key(|info| info.size).unwrap().size;
-    let digits = format!("{}", max_size).len();
-
-    let byte_type = if si {
-        ByteType::Decimal
-    } else {
-        ByteType::Binary
-    };
-
-    for info in path_info {
-        let s = info.to_string(humanize, &byte_type, digits, show_ts);
-        println!("{}", s)
-    }
-}
-
-pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) { //-> Result<Vec<FileInfo>, Box<dyn Error>> {
-    
-    // let mut all_file_info = match parent {
-    //     Some(v) => v,
-    //     None => &Vec::new(),
-    // };
-    // let mut all_file_info: Vec<FileInfo> = Vec::new();
-
-
+pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) {
     let attr = fs::metadata(path).unwrap();
     if attr.is_file() {
         let fi = get_file_info(path, depth, &attr).unwrap();
@@ -210,13 +205,9 @@ pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) { //-> Re
 
         for entry in fs::read_dir(path).unwrap() {
             let item: fs::DirEntry = entry.unwrap();
-            // let mut fi = walk(&item.path(), depth + 1, &all_file_info)?;
             walk(&item.path(), depth + 1, &mut dir_info);
 
-            // all_file_info.append(&mut fi);
-
             let summarised_fi = dir_info.last().unwrap();
-            // let summarised_fi = all_file_info.last().unwrap();
             total_size += summarised_fi.size;
 
             if summarised_fi.modified > most_recent {
@@ -226,6 +217,8 @@ pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) { //-> Re
 
         // make FileInfo with summarised dir
         total_size += attr.len();
+
+        dir_info.sort_by(|a, b| a.path.cmp(&b.path));
 
         let p = PathBuf::from(&path.to_str().unwrap());
         let ft = get_file_type(&attr);
@@ -241,19 +234,13 @@ pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) { //-> Re
         // insert parent dir entry above it's contents
         all_file_info.insert(parent_info_idx, total_info);
     }
-
-    // Ok(all_file_info)
 }
 
 pub fn list_files(cli: Cli) {
     let path = PathBuf::from(cli.file);
 
-    // let path_info = walk(&path, None).unwrap();
-
     let mut all_file_info: Vec<FileInfo> = Vec::new();
-    // let total_info = walk(&path, 1, all_file_info).unwrap();
     walk(&path, 1, &mut all_file_info);
-
 
     // let path_info = total_info.last().unwrap().clone();
     // sort(&mut total_info, cli.ascending, "size");
