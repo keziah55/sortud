@@ -80,19 +80,13 @@ pub struct FileInfo {
 }
 
 impl FileInfo {
-    pub fn to_string(
-        &self,
-        humanize: bool,
-        byte_type: &ByteType,
-        size_width: usize,
-        show_ts: bool,
-    ) -> String {
+    pub fn to_string(&self, humanize: bool, byte_type: &ByteType, show_ts: bool) -> String {
         let space = " ".repeat(2);
 
         let mut size = if humanize {
-            format_size(self.size, byte_type, size_width)
+            format_size(self.size, byte_type)
         } else {
-            format!("{:>width$}", self.size, width = size_width)
+            format!("{:>width$}", self.size, width = 7)
         };
         size = format!("{}{}", size, space);
 
@@ -114,12 +108,12 @@ impl FileInfo {
 }
 impl fmt::Display for FileInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = self.to_string(true, &ByteType::Binary, 10, true);
+        let s = self.to_string(true, &ByteType::Binary, true);
         write!(f, "{}", s)
     }
 }
 
-fn format_size(size: u64, byte_type: &ByteType, size_width: usize) -> String {
+fn format_size(size: u64, byte_type: &ByteType) -> String {
     let mut size_f = size as f64;
     let mut prefixes = vec!["", "K", "M", "G", "T"];
 
@@ -137,15 +131,10 @@ fn format_size(size: u64, byte_type: &ByteType, size_width: usize) -> String {
         idx += 1;
     }
 
-    let width = 7; //(size_width % 3) + 4; //
-
-    format!("{0:width$.3} {1}B", size_f, prefixes[idx])
+    format!("{0:7.3} {1}B", size_f, prefixes[idx])
 }
 
 fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool) {
-    let max_size = path_info.iter().max_by_key(|info| info.size).unwrap().size;
-    let digits = format!("{}", max_size).len();
-
     let byte_type = if si {
         ByteType::Decimal
     } else {
@@ -153,7 +142,7 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: b
     };
 
     for info in path_info {
-        let s = info.to_string(humanize, &byte_type, digits, show_ts);
+        let s = info.to_string(humanize, &byte_type, show_ts);
         println!("{}", s);
         if let Some(v) = &info.children {
             print_results(v, humanize, si, show_ts)
