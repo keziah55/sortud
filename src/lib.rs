@@ -6,8 +6,6 @@
 // - exclude patterns
 // - sort by size, modified date or name (option for dirs first)
 
-// Metadata docs https://doc.rust-lang.org/std/fs/struct.Metadata.html
-
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use std::error::Error;
@@ -40,6 +38,10 @@ pub struct Cli {
     /// show time of last modification of file, or any file in sub-directory
     #[arg(short = 't', long)]
     time: bool,
+
+    /// skip symlinks
+    #[arg(long)]
+    skip_symlinks: bool,
 
     /// file or path
     file: String,
@@ -122,7 +124,13 @@ fn format_size(size: u64, byte_type: &ByteType) -> String {
     format!("{0:7.3} {1}B", size_f, prefixes[idx])
 }
 
-fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool, max_depth: Option<u8>) {
+fn print_results(
+    path_info: &Vec<FileInfo>,
+    humanize: bool,
+    si: bool,
+    show_ts: bool,
+    max_depth: Option<u8>,
+) {
     let byte_type = if si {
         ByteType::Decimal
     } else {
@@ -132,7 +140,7 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: b
     for info in path_info {
         if let Some(d) = max_depth {
             if d < info.depth {
-                return
+                return;
             }
         }
         let s = info.to_string(humanize, &byte_type, show_ts);
@@ -143,7 +151,8 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: b
     }
 }
 
-fn get_file_type(md: &fs::Metadata) -> ItemType {
+fn get_file_type(path: &Path) -> ItemType {
+    let md = fs::symlink_metadata(path).unwrap();
     if md.is_file() {
         ItemType::File
     } else if md.is_dir() {
@@ -155,12 +164,23 @@ fn get_file_type(md: &fs::Metadata) -> ItemType {
     }
 }
 
-fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, Box<dyn Error>> {
+fn get_file_info(
+    path: &Path,
+    depth: u8,
+    md: &fs::Metadata,
+    parent_is_symlink: bool,
+) -> Result<FileInfo, Box<dyn Error>> {
     let modified = md.modified()?;
     // make new PathBuf from given Path (to avoid lifetime issues)
     let p = PathBuf::from(&path.to_str().unwrap());
 
-    let ft = get_file_type(md);
+    // let ft = get_file_type(path);
+
+    let ft = if parent_is_symlink {
+        ItemType::Symlink
+    } else {
+        get_file_type(path)
+    };
 
     Ok(FileInfo {
         path: p,
@@ -172,20 +192,36 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
     })
 }
 
-pub fn walk(path: &Path, depth: u8, sort_ascending: bool, all_file_info: &mut Vec<FileInfo>) {
-    
-    let md = fs::metadata(path);
+pub fn walk(
+    path: &Path,
+    depth: u8,
+    sort_ascending: bool,
+    skip_symlinks: bool,
+    parent_is_symlink: bool,
+    all_file_info: &mut Vec<FileInfo>,
+) {
+    let md = if skip_symlinks {
+        fs::symlink_metadata(path)
+    } else {
+        fs::metadata(path)
+    };
 
     let attr = match md {
         Ok(attr) => attr,
         Err(_) => {
             // println!("skipping {:#?}", path);
-            return
-        },
+            return;
+        }
+    };
+
+    let _parent_is_symlink = if parent_is_symlink {
+        true
+    } else {
+        fs::symlink_metadata(path).unwrap().is_symlink()
     };
 
     if attr.is_file() {
-        let fi = get_file_info(path, depth, &attr).unwrap();
+        let fi = get_file_info(path, depth, &attr, _parent_is_symlink).unwrap();
         all_file_info.push(fi);
     } else if attr.is_dir() {
         let parent_info_idx = all_file_info.len();
@@ -197,7 +233,14 @@ pub fn walk(path: &Path, depth: u8, sort_ascending: bool, all_file_info: &mut Ve
 
         for entry in fs::read_dir(path).unwrap() {
             let item: fs::DirEntry = entry.unwrap();
-            walk(&item.path(), depth + 1, sort_ascending, &mut dir_info);
+            walk(
+                &item.path(),
+                depth + 1,
+                sort_ascending,
+                skip_symlinks,
+                _parent_is_symlink,
+                &mut dir_info,
+            );
 
             let summarised_fi = dir_info.last().unwrap();
             total_size += summarised_fi.size;
@@ -217,7 +260,11 @@ pub fn walk(path: &Path, depth: u8, sort_ascending: bool, all_file_info: &mut Ve
         }
 
         let p = PathBuf::from(&path.to_str().unwrap());
-        let ft = get_file_type(&attr);
+        let ft = if _parent_is_symlink {
+            ItemType::Symlink
+        } else {
+            get_file_type(path)
+        };
         let total_info = FileInfo {
             path: p,
             depth: depth,
@@ -236,7 +283,20 @@ pub fn list_files(cli: Cli) {
     let path = PathBuf::from(cli.file);
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
-    walk(&path, 1, cli.ascending, &mut all_file_info);
+    walk(
+        &path,
+        1,
+        cli.ascending,
+        cli.skip_symlinks,
+        false,
+        &mut all_file_info,
+    );
 
-    print_results(&all_file_info, cli.humanize, cli.si, cli.time, cli.max_depth);
+    print_results(
+        &all_file_info,
+        cli.humanize,
+        cli.si,
+        cli.time,
+        cli.max_depth,
+    );
 }
