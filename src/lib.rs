@@ -115,7 +115,7 @@ impl fmt::Display for FileInfo {
 
 fn format_size(size: u64, byte_type: &ByteType) -> String {
     let mut size_f = size as f64;
-    let mut prefixes = vec!["", "K", "M", "G", "T"];
+    let mut prefixes = vec![" ", "K", "M", "G", "T"];
 
     let div = match &byte_type {
         ByteType::Decimal => {
@@ -134,7 +134,7 @@ fn format_size(size: u64, byte_type: &ByteType) -> String {
     format!("{0:7.3} {1}B", size_f, prefixes[idx])
 }
 
-fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool) {
+fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: bool, max_depth: Option<u8>) {
     let byte_type = if si {
         ByteType::Decimal
     } else {
@@ -142,10 +142,15 @@ fn print_results(path_info: &Vec<FileInfo>, humanize: bool, si: bool, show_ts: b
     };
 
     for info in path_info {
+        if let Some(d) = max_depth {
+            if d < info.depth {
+                return
+            }
+        }
         let s = info.to_string(humanize, &byte_type, show_ts);
         println!("{}", s);
         if let Some(v) = &info.children {
-            print_results(v, humanize, si, show_ts)
+            print_results(v, humanize, si, show_ts, max_depth)
         }
     }
 }
@@ -262,5 +267,5 @@ pub fn list_files(cli: Cli) {
 
     // println!("\n\n{:#?}", total_info)
 
-    print_results(&all_file_info, cli.humanize, cli.si, cli.time);
+    print_results(&all_file_info, cli.humanize, cli.si, cli.time, cli.max_depth);
 }
