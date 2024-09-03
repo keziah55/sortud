@@ -1,15 +1,3 @@
-// if file, return size and modified date
-// if dir, walk and call func on all items
-
-// sum sizes, return most recent mod date
-
-// use map() function to apply (recursive) func to all in top-level
-// can this be modified to both sum sizes and find most recent time (on a per-dir basis)?
-
-// nb: there is a max-depth arg
-// this should be used when showing results
-// but for calculating dir sizes, need to walk all the way down
-
 // print results in nice table
 // use different colours for files and dirs
 
@@ -249,23 +237,6 @@ pub fn list_files(cli: Cli) {
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
     walk(&path, 1, cli.ascending, &mut all_file_info);
-
-    // let path_info = total_info.last().unwrap().clone();
-    // sort(&mut total_info, cli.ascending, "size");
-
-    // let byte_type = if cli.si {
-    //     ByteType::Decimal
-    // } else {
-    //     ByteType::Binary
-    // };
-    // let format_size = format_size(path_info.size, byte_type);
-
-    // println!(
-    //     "\nDone!\ntotal size: {},\nmost recent: {:?}",
-    //     format_size, path_info.modified
-    // );
-
-    // println!("\n\n{:#?}", total_info)
 
     print_results(&all_file_info, cli.humanize, cli.si, cli.time, cli.max_depth);
 }
