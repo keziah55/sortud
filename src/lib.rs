@@ -179,8 +179,18 @@ fn get_file_info(path: &Path, depth: u8, md: &fs::Metadata) -> Result<FileInfo, 
     })
 }
 
-pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) {
-    let attr = fs::metadata(path).unwrap();
+pub fn walk(path: &Path, depth: u8, sort_ascending: bool, all_file_info: &mut Vec<FileInfo>) {
+    
+    let md = fs::metadata(path);
+
+    let attr = match md {
+        Ok(attr) => attr,
+        Err(_) => {
+            // println!("skipping {:#?}", path);
+            return
+        },
+    };
+
     if attr.is_file() {
         let fi = get_file_info(path, depth, &attr).unwrap();
         all_file_info.push(fi);
@@ -194,7 +204,7 @@ pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) {
 
         for entry in fs::read_dir(path).unwrap() {
             let item: fs::DirEntry = entry.unwrap();
-            walk(&item.path(), depth + 1, &mut dir_info);
+            walk(&item.path(), depth + 1, sort_ascending, &mut dir_info);
 
             let summarised_fi = dir_info.last().unwrap();
             total_size += summarised_fi.size;
@@ -207,7 +217,11 @@ pub fn walk(path: &Path, depth: u8, all_file_info: &mut Vec<FileInfo>) {
         // make FileInfo with summarised dir
         total_size += attr.len();
 
-        dir_info.sort_by(|a, b| a.path.cmp(&b.path));
+        if sort_ascending {
+            dir_info.sort_by(|a, b| a.size.cmp(&b.size));
+        } else {
+            dir_info.sort_by(|a, b| b.size.cmp(&a.size));
+        }
 
         let p = PathBuf::from(&path.to_str().unwrap());
         let ft = get_file_type(&attr);
@@ -229,7 +243,7 @@ pub fn list_files(cli: Cli) {
     let path = PathBuf::from(cli.file);
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
-    walk(&path, 1, &mut all_file_info);
+    walk(&path, 1, cli.ascending, &mut all_file_info);
 
     // let path_info = total_info.last().unwrap().clone();
     // sort(&mut total_info, cli.ascending, "size");
