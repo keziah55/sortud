@@ -60,6 +60,16 @@ pub enum ItemType {
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
+enum ItemTypeColours {
+    File = 7,
+    FileHidden = 244,
+    Dir = 39,
+    DirHidden = 74,
+    Symlink = 10,
+    SymlinkHidden = 70,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct FileInfo {
     pub path: PathBuf,
     pub depth: u8,
@@ -87,15 +97,71 @@ impl FileInfo {
             String::from("")
         };
 
-        let s = format!("{}{}{}", size, ts, self.path.to_str().unwrap());
+        // let s = format!("{}{}{}", size, ts, self.path.to_str().unwrap());
+        let s = format!("{}{}{}", size, ts, self.pretty_path());
 
-        match self.file_type {
-            ItemType::Dir => format!("\x1b[34m{:#}\x1b[0m", s),
-            ItemType::Symlink => format!("\x1b[92m{:#}\x1b[0m", s),
-            ItemType::File => format!("{:#}", s),
+        let hidden = self.is_hidden();
+
+        let colour = match self.file_type {
+            ItemType::Dir => {
+                if hidden {
+                    ItemTypeColours::DirHidden
+                } else {
+                    ItemTypeColours::Dir
+                }
+            }
+            ItemType::Symlink => {
+                if hidden {
+                    ItemTypeColours::SymlinkHidden
+                } else {
+                    ItemTypeColours::Symlink
+                }
+            }
+            ItemType::File => {
+                if hidden {
+                    ItemTypeColours::FileHidden
+                } else {
+                    ItemTypeColours::File
+                }
+            }
+        };
+
+        format!("\x1b[38;5;{}m{:#}\x1b[0m", colour as i32, s)
+    }
+
+    fn is_hidden(&self) -> bool {
+        self.path
+            .components()
+            .last()
+            .unwrap()
+            .as_os_str()
+            .to_str()
+            .unwrap()
+            .starts_with(".")
+    }
+
+    fn first_component_is_pwd(&self) -> bool {
+        self.path
+            .components()
+            .next()
+            .unwrap()
+            .as_os_str()
+            .to_str()
+            .unwrap()
+            == "."
+    }
+
+    fn pretty_path(&self) -> &str {
+        if self.first_component_is_pwd() {
+            let mut components = self.path.components();
+            components.next(); // remove the first component
+            components.as_path().to_str().unwrap()
+        } else {
+            self.path.to_str().unwrap()
         }
     }
 }
+
 impl fmt::Display for FileInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = self.to_string(true, &ByteType::Binary, true);
