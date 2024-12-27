@@ -310,9 +310,7 @@ pub fn walk(
         } else {
             get_file_type(path)
         };
-
-        let dir_iter_result = fs::read_dir(path);
-        let accessible = match dir_iter_result {
+        let accessible = match fs::read_dir(path) {
             Err(_) => false,
             Ok(dir_iter) => {
                 for entry in dir_iter {
