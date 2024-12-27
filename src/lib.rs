@@ -77,6 +77,7 @@ pub struct FileInfo {
     pub size: u64,
     pub modified: time::SystemTime,
     pub children: Option<Vec<FileInfo>>,
+    pub accessible: bool,
 }
 
 impl FileInfo {
@@ -98,7 +99,7 @@ impl FileInfo {
         };
 
         // let s = format!("{}{}{}", size, ts, self.path.to_str().unwrap());
-        let s = format!("{}{}{}", size, ts, self.pretty_path());
+        let mut s = format!("{}{}{}", size, ts, self.pretty_path());
 
         let hidden = self.is_hidden();
 
@@ -126,7 +127,11 @@ impl FileInfo {
             }
         };
 
-        format!("\x1b[38;5;{}m{:#}\x1b[0m", colour as i32, s)
+        s = format!("\x1b[38;5;{}m{:#}\x1b[0m", colour as i32, s);
+        if !self.accessible {
+            s = format!("{}\n  \x1b[38;5;3mCould not access contents\x1b[0m",s)
+        }
+        s
     }
 
     fn is_hidden(&self) -> bool {
@@ -255,6 +260,7 @@ fn get_file_info(
         size: md.len(),
         modified: modified.clone(),
         children: None,
+        accessible: true,
     })
 }
 
@@ -292,29 +298,45 @@ pub fn walk(
     } else if attr.is_dir() {
         let parent_info_idx = all_file_info.len();
 
+        // variables to accumulate info about this dir
         let mut dir_info: Vec<FileInfo> = Vec::new();
-
         let mut total_size: u64 = 0;
         let mut most_recent: time::SystemTime = time::UNIX_EPOCH;
 
-        for entry in fs::read_dir(path).unwrap() {
-            let item: fs::DirEntry = entry.unwrap();
-            walk(
-                &item.path(),
-                depth + 1,
-                sort_ascending,
-                skip_symlinks,
-                _parent_is_symlink,
-                &mut dir_info,
-            );
+        // other info about the dir
+        let p = PathBuf::from(&path.to_str().unwrap());
+        let ft = if _parent_is_symlink {
+            ItemType::Symlink
+        } else {
+            get_file_type(path)
+        };
 
-            let summarised_fi = dir_info.last().unwrap();
-            total_size += summarised_fi.size;
+        let dir_iter_result = fs::read_dir(path);
+        let accessible = match dir_iter_result {
+            Err(_) => false,
+            Ok(dir_iter) => {
+                for entry in dir_iter {
+                    let item: fs::DirEntry = entry.unwrap();
 
-            if summarised_fi.modified > most_recent {
-                most_recent = summarised_fi.modified;
+                    walk(
+                        &item.path(),
+                        depth + 1,
+                        sort_ascending,
+                        skip_symlinks,
+                        _parent_is_symlink,
+                        &mut dir_info,
+                    );
+
+                    let summarised_fi = dir_info.last().unwrap();
+                    total_size += summarised_fi.size;
+
+                    if summarised_fi.modified > most_recent {
+                        most_recent = summarised_fi.modified;
+                    }
+                }
+                true // dir is accessible
             }
-        }
+        };
 
         // make FileInfo with summarised dir
         total_size += attr.len();
@@ -325,12 +347,6 @@ pub fn walk(
             dir_info.sort_by(|a, b| b.size.cmp(&a.size));
         }
 
-        let p = PathBuf::from(&path.to_str().unwrap());
-        let ft = if _parent_is_symlink {
-            ItemType::Symlink
-        } else {
-            get_file_type(path)
-        };
         let total_info = FileInfo {
             path: p,
             depth: depth,
@@ -338,6 +354,7 @@ pub fn walk(
             size: total_size,
             modified: most_recent,
             children: Some(dir_info),
+            accessible: accessible,
         };
 
         // insert parent dir entry above it's contents
