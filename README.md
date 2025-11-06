@@ -1,8 +1,8 @@
 # sortud
 
-Command line tool to show the size of files and directories.
+Command line tool to show the contents of a given path, sorted by size.
 
-See `sortud --help` for usage.
+See `sortud --help` for full usage.
 
 ## Installation
 
