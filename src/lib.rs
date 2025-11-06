@@ -18,34 +18,34 @@ use std::vec;
 
 #[derive(Parser)]
 #[command(version = "0.1")]
-#[command(about="display sizes of files and directories", long_about=None)]
+#[command(about="List contents of path, sorted by size.", long_about=None)]
 pub struct Cli {
-    /// only descend up to N levels below the current directory
+    /// Only descend up to N levels below the current directory
     #[arg(long, short = 'd', value_name = "N")]
     max_depth: Option<u8>,
 
-    /// print results in ascending order, rather than the default descending
+    /// Print results in ascending order, rather than the default descending
     #[arg(short, long)]
     ascending: bool,
 
-    /// print sizes in human readable format (e.g. 1K, 23M, 4G)
+    /// Print sizes in human readable format (e.g. 1K, 23M, 4G)
     #[arg(short = 's', long)]
     humanize: bool,
 
-    /// like humanize, but use powers of 1000 instead of 1024
+    /// Like humanize, but use powers of 1000 instead of 1024
     #[arg(long)]
     si: bool,
 
-    /// show time of last modification of file, or any file in sub-directory
+    /// Show time of last modification of file, or any file in sub-directory
     #[arg(short = 't', long)]
     time: bool,
 
-    /// skip symlinks
+    /// Skip symlinks
     #[arg(long)]
     skip_symlinks: bool,
 
-    /// file or path
-    file: String,
+    /// Path of directory or file.
+    path: String,
 }
 
 pub enum ByteType {
@@ -363,7 +363,7 @@ pub fn walk(
 }
 
 pub fn list_files(cli: Cli) {
-    let path = PathBuf::from(cli.file);
+    let path = PathBuf::from(cli.path);
 
     let mut all_file_info: Vec<FileInfo> = Vec::new();
     walk(
