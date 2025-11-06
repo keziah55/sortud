@@ -2,6 +2,8 @@
 
 Command line tool to show the size of files and directories.
 
+See `sortud --help` for usage.
+
 ## Installation
 
 Build with
