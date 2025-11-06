@@ -11,6 +11,7 @@ use clap::Parser;
 use std::error::Error;
 use std::fmt;
 use std::fs;
+use std::path;
 use std::path::{Path, PathBuf};
 use std::time;
 use std::vec;
@@ -129,13 +130,14 @@ impl FileInfo {
 
         s = format!("\x1b[38;5;{}m{:#}\x1b[0m", colour as i32, s);
         if !self.accessible {
-            s = format!("{}\n  \x1b[38;5;3mCould not access contents\x1b[0m",s)
+            s = format!("{}\n  \x1b[38;5;3mCould not access contents\x1b[0m", s)
         }
         s
     }
 
     fn is_hidden(&self) -> bool {
-        self.path
+        path::absolute(&self.path)
+            .unwrap()
             .components()
             .last()
             .unwrap()
@@ -210,7 +212,7 @@ fn print_results(
 
     for info in path_info {
         if let Some(d) = max_depth {
-            if d < info.depth {
+            if (d + 1) < info.depth {
                 return;
             }
         }
