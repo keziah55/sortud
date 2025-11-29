@@ -82,13 +82,20 @@ pub struct FileInfo {
 }
 
 impl FileInfo {
-    pub fn to_string(&self, humanize: bool, byte_type: &ByteType, show_ts: bool) -> String {
+    pub fn to_string(
+        &self,
+        humanize: bool,
+        byte_type: &ByteType,
+        show_ts: bool,
+        max_size: u64,
+    ) -> String {
         let space = " ".repeat(2);
 
         let mut size = if humanize {
             format_size(self.size, byte_type)
         } else {
-            format!("{:>width$}", self.size, width = 7)
+            let width  = max_size.to_string().chars().count();
+            format!("{:>width$}", self.size, width = width)
         };
         size = format!("{}{}", size, space);
 
@@ -171,7 +178,7 @@ impl FileInfo {
 
 impl fmt::Display for FileInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = self.to_string(true, &ByteType::Binary, true);
+        let s = self.to_string(true, &ByteType::Binary, true, self.size);
         write!(f, "{}", s)
     }
 }
@@ -210,13 +217,16 @@ fn print_results(
         ByteType::Binary
     };
 
+    // size of all, i.e. should be largest size
+    let parent_size = path_info[0].size;
+
     for info in path_info {
         if let Some(d) = max_depth {
             if (d + 1) < info.depth {
                 return;
             }
         }
-        let s = info.to_string(humanize, &byte_type, show_ts);
+        let s = info.to_string(humanize, &byte_type, show_ts, parent_size);
         println!("{}", s);
         if let Some(v) = &info.children {
             print_results(v, humanize, si, show_ts, max_depth)
