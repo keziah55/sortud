@@ -44,6 +44,10 @@ pub struct Cli {
     #[arg(long)]
     skip_symlinks: bool,
 
+    /// Skip hidden files/dirs
+    #[arg(long)]
+    skip_hidden: bool,
+
     /// Path of directory or file.
     path: String,
 }
@@ -143,15 +147,7 @@ impl FileInfo {
     }
 
     fn is_hidden(&self) -> bool {
-        path::absolute(&self.path)
-            .unwrap()
-            .components()
-            .last()
-            .unwrap()
-            .as_os_str()
-            .to_str()
-            .unwrap()
-            .starts_with(".")
+        file_is_hidden(&self.path)
     }
 
     fn first_component_is_pwd(&self) -> bool {
@@ -189,6 +185,19 @@ impl fmt::Display for FileInfo {
     }
 }
 
+/// Return true if `path` represents hidden file/dir
+fn file_is_hidden(path: &Path) -> bool {
+    path::absolute(path)
+        .unwrap()
+        .components()
+        .last()
+        .unwrap()
+        .as_os_str()
+        .to_str()
+        .unwrap()
+        .starts_with(".")
+}
+
 fn format_size(size: u64, byte_type: &ByteType) -> String {
     let mut size_f = size as f64;
     let mut prefixes = vec![" ", "K", "M", "G", "T"];
@@ -217,14 +226,43 @@ fn print_results(
     show_ts: bool,
     max_depth: Option<u8>,
 ) {
+    // size of all, i.e. should be largest size
+    let parent_size = path_info[0].size;
+    _print_results(path_info, humanize, si, show_ts, max_depth, parent_size)
+
+    // let byte_type = if si {
+    //     ByteType::Decimal
+    // } else {
+    //     ByteType::Binary
+    // };
+
+    // for info in path_info {
+    //     if let Some(d) = max_depth {
+    //         if (d + 1) < info.depth {
+    //             return;
+    //         }
+    //     }
+    //     let s = info.to_string(humanize, &byte_type, show_ts, parent_size);
+    //     println!("{}", s);
+    //     if let Some(v) = &info.children {
+    //         print_results(v, humanize, si, show_ts, max_depth)
+    //     }
+    // }
+}
+
+fn _print_results(
+    path_info: &Vec<FileInfo>,
+    humanize: bool,
+    si: bool,
+    show_ts: bool,
+    max_depth: Option<u8>,
+    max_size: u64,
+) {
     let byte_type = if si {
         ByteType::Decimal
     } else {
         ByteType::Binary
     };
-
-    // size of all, i.e. should be largest size
-    let parent_size = path_info[0].size;
 
     for info in path_info {
         if let Some(d) = max_depth {
@@ -232,10 +270,10 @@ fn print_results(
                 return;
             }
         }
-        let s = info.to_string(humanize, &byte_type, show_ts, parent_size);
+        let s = info.to_string(humanize, &byte_type, show_ts, max_size);
         println!("{}", s);
         if let Some(v) = &info.children {
-            print_results(v, humanize, si, show_ts, max_depth)
+            _print_results(v, humanize, si, show_ts, max_depth, max_size)
         }
     }
 }
@@ -287,6 +325,7 @@ pub fn walk(
     depth: u8,
     sort_ascending: bool,
     skip_symlinks: bool,
+    skip_hidden: bool,
     parent_is_symlink: bool,
     all_file_info: &mut Vec<FileInfo>,
 ) {
@@ -303,6 +342,10 @@ pub fn walk(
             return;
         }
     };
+
+    if skip_hidden & file_is_hidden(&path) {
+        return;
+    }
 
     let _parent_is_symlink = if parent_is_symlink {
         true
@@ -339,6 +382,7 @@ pub fn walk(
                         depth + 1,
                         sort_ascending,
                         skip_symlinks,
+                        skip_hidden,
                         _parent_is_symlink,
                         &mut dir_info,
                     );
@@ -387,6 +431,7 @@ pub fn list_files(cli: Cli) {
         1,
         cli.ascending,
         cli.skip_symlinks,
+        cli.skip_hidden,
         false,
         &mut all_file_info,
     );
