@@ -48,7 +48,7 @@ pub struct Cli {
     #[arg(long)]
     skip_hidden: bool,
 
-    /// Show only files or directories
+    /// Show only files or directories. (See also: skip_symlinks.)
     #[arg(short='t', long,
         value_parser = clap::builder::PossibleValuesParser::new(
             ["f", "d"]
