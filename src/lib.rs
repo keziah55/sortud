@@ -37,7 +37,7 @@ pub struct Cli {
     si: bool,
 
     /// Show time of last modification of file, or any file in sub-directory
-    #[arg(short = 't', long)]
+    #[arg(short = 'm', long)]
     time: bool,
 
     /// Skip symlinks
@@ -47,6 +47,14 @@ pub struct Cli {
     /// Skip hidden files/dirs
     #[arg(long)]
     skip_hidden: bool,
+
+    /// Show only files or directories
+    #[arg(short='t', long,
+        value_parser = clap::builder::PossibleValuesParser::new(
+            ["f", "d"]
+        )
+    )]
+    item_type: Option<String>,
 
     /// Path of directory or file.
     path: String,
@@ -110,7 +118,6 @@ impl FileInfo {
             String::from("")
         };
 
-        // let s = format!("{}{}{}", size, ts, self.path.to_str().unwrap());
         let mut s = format!("{}{}{}", size, ts, self.pretty_path());
 
         let hidden = self.is_hidden();
@@ -230,11 +237,20 @@ fn print_results(
     si: bool,
     show_ts: bool,
     max_depth: Option<u8>,
+    filter_item_type: &Option<String>,
 ) {
     // size of all, i.e. should be largest size
     let parent_size = path_info[0].size;
 
-    _print_results(path_info, humanize, si, show_ts, max_depth, parent_size)
+    _print_results(
+        path_info,
+        humanize,
+        si,
+        show_ts,
+        max_depth,
+        filter_item_type,
+        parent_size,
+    )
 }
 
 /// Write `path_info` to stdout, using `max_size` to pad the size.
@@ -246,6 +262,7 @@ fn _print_results(
     si: bool,
     show_ts: bool,
     max_depth: Option<u8>,
+    filter_item_type: &Option<String>,
     max_size: u64,
 ) {
     let byte_type = if si {
@@ -260,10 +277,45 @@ fn _print_results(
                 return;
             }
         }
-        let s = info.to_string(humanize, &byte_type, show_ts, max_size);
-        println!("{}", s);
+
+        let skip_print = match info.file_type {
+            ItemType::File => match filter_item_type {
+                Some(_item_type) => {
+                    if _item_type == "f" {
+                        false
+                    } else {
+                        true
+                    }
+                }
+                None => false,
+            },
+            ItemType::Dir => match filter_item_type {
+                Some(_item_type) => {
+                    if _item_type == "d" {
+                        false
+                    } else {
+                        true
+                    }
+                }
+                None => false,
+            },
+            _ => false,
+        };
+
+        if !skip_print {
+            let s = info.to_string(humanize, &byte_type, show_ts, max_size);
+            println!("{}", s);
+        }
         if let Some(v) = &info.children {
-            _print_results(v, humanize, si, show_ts, max_depth, max_size)
+            _print_results(
+                v,
+                humanize,
+                si,
+                show_ts,
+                max_depth,
+                filter_item_type,
+                max_size,
+            )
         }
     }
 }
@@ -377,11 +429,15 @@ pub fn walk(
                         &mut dir_info,
                     );
 
-                    let summarised_fi = dir_info.last().unwrap();
-                    total_size += summarised_fi.size;
+                    match dir_info.last() {
+                        Some(summarised_fi) => {
+                            total_size += summarised_fi.size;
 
-                    if summarised_fi.modified > most_recent {
-                        most_recent = summarised_fi.modified;
+                            if summarised_fi.modified > most_recent {
+                                most_recent = summarised_fi.modified;
+                            }
+                        }
+                        None => {}
                     }
                 }
                 true // dir is accessible
@@ -432,5 +488,6 @@ pub fn list_files(cli: Cli) {
         cli.si,
         cli.time,
         cli.max_depth,
+        &cli.item_type,
     );
 }
