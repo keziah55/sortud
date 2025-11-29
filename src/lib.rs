@@ -94,7 +94,7 @@ impl FileInfo {
         let mut size = if humanize {
             format_size(self.size, byte_type)
         } else {
-            let width  = max_size.to_string().chars().count();
+            let width = max_size.to_string().chars().count();
             format!("{:>width$}", self.size, width = width)
         };
         size = format!("{}{}", size, space);
@@ -169,7 +169,13 @@ impl FileInfo {
         if self.first_component_is_pwd() {
             let mut components = self.path.components();
             components.next(); // remove the first component
-            components.as_path().to_str().unwrap()
+
+            let pp = components.as_path().to_str().unwrap();
+            if pp.to_string().chars().count() == 0 {
+                "."
+            } else {
+                pp
+            }
         } else {
             self.path.to_str().unwrap()
         }
