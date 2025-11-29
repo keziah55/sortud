@@ -198,6 +198,10 @@ fn file_is_hidden(path: &Path) -> bool {
         .starts_with(".")
 }
 
+/// Format size in bytes to SI string
+///
+/// * `size` - size in bytes
+/// * `byte_type` - whether to use multiple of 1000 (Decimal) or 1024 (Binary)
 fn format_size(size: u64, byte_type: &ByteType) -> String {
     let mut size_f = size as f64;
     let mut prefixes = vec![" ", "K", "M", "G", "T"];
@@ -219,6 +223,7 @@ fn format_size(size: u64, byte_type: &ByteType) -> String {
     format!("{0:7.3} {1}B", size_f, prefixes[idx])
 }
 
+/// Write `path_info` to stdout
 fn print_results(
     path_info: &Vec<FileInfo>,
     humanize: bool,
@@ -228,28 +233,13 @@ fn print_results(
 ) {
     // size of all, i.e. should be largest size
     let parent_size = path_info[0].size;
+
     _print_results(path_info, humanize, si, show_ts, max_depth, parent_size)
-
-    // let byte_type = if si {
-    //     ByteType::Decimal
-    // } else {
-    //     ByteType::Binary
-    // };
-
-    // for info in path_info {
-    //     if let Some(d) = max_depth {
-    //         if (d + 1) < info.depth {
-    //             return;
-    //         }
-    //     }
-    //     let s = info.to_string(humanize, &byte_type, show_ts, parent_size);
-    //     println!("{}", s);
-    //     if let Some(v) = &info.children {
-    //         print_results(v, humanize, si, show_ts, max_depth)
-    //     }
-    // }
 }
 
+/// Write `path_info` to stdout, using `max_size` to pad the size.
+///
+/// This function is called recursively.
 fn _print_results(
     path_info: &Vec<FileInfo>,
     humanize: bool,
